@@ -1,7 +1,12 @@
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.naive_bayes import MultinomialNB
-
+from flask_cors import CORS
+from flask import Flask,request,jsonify,send_from_directory
+app=Flask(__name__)
+CORS(app, resources={
+    r"/chat": {"origins": "http://127.0.0.1:5500"}
+})
 # 1. Training data: (message, intent)
 data = [
     # Greetings
@@ -51,20 +56,45 @@ responses = {
     "goodbye": "Goodbye! Keep learning and stay curious.",
     "name": "My name is CyberMentor AI."
 }
+# 5. Serve the website
+@app.route("/")
+def home():
+    return send_from_directory(".", "index.html")
 
-# 6. Chat with the trained model
-while True:
-    user = input("\nYou: ").strip()
+@app.route("/style.css")
+def styles():
+    return send_from_directory(".", "style.css")
 
-    if user.lower() == "exit":
-        print("Bot: See you next time!")
-        break
+@app.route("/script.js")
+def javascript():
+    return send_from_directory(".", "script.js")
 
-    if not user:
-        continue
+# 6. Receive messages from the website
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json(silent=True) or {}
+    user_message = data.get("message", "").strip()
 
-    user_vector = vectorizer.transform([user])
+    if not user_message:
+        return jsonify({"reply": "Please enter a message."}), 400
+
+    # Convert message into numerical features
+    user_vector = vectorizer.transform([user_message])
+
+    # Avoid predicting an intent when no known words were found
+    if user_vector.nnz == 0:
+        return jsonify({
+            "reply": "I'm still learning. Please try hello, bye, or ask my name."
+        })
+
+    # Predict intent and select response
     intent = model.predict(user_vector)[0]
+    reply = responses[intent]
 
-    print("Predicted intent:", intent)
-    print("Bot:", responses[intent])
+    return jsonify({
+        "intent": intent,
+        "reply": reply
+    })
+
+if __name__ == "__main__":
+    app.run(debug=True)

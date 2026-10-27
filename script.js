@@ -1,7 +1,9 @@
+
 const form = document.querySelector("#message-form");
 const input = document.querySelector("#message-input");
 const messages = document.querySelector("#messages");
 
+// Display a message in the chat
 function addMessage(text, sender) {
     const message = document.createElement("div");
 
@@ -16,77 +18,94 @@ function addMessage(text, sender) {
     });
 }
 
+// Send a message to the Python ML chatbot
 async function sendMessage() {
-
     const text = input.value.trim();
 
     if (!text) return;
 
-    // Remove welcome message
+    // Remove the welcome message
     messages.querySelector(".welcome-message")?.remove();
 
-    // Show user's message
+    // Display the user's message
     addMessage(text, "user");
 
-    // Clear input
+    // Clear the input
     input.value = "";
     input.style.height = "auto";
 
+    // Prevent duplicate submissions while waiting
+    const sendButton = form.querySelector(
+        'button[type="submit"]'
+    );
+
+    if (sendButton) {
+        sendButton.disabled = true;
+    }
+
     try {
+        // Send the message to Flask
+        const response = await fetch("http://127.0.0.1:5000/chat", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: text
+            })
+        });
 
-        const response = await fetch(
-            "http://127.0.0.1:5000/chat",
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    message: text
-                })
-            }
-        );
-
+        // Convert the server response to JavaScript data
         const data = await response.json();
 
-        // Show bot response
-        addMessage(data.reply, "assistant");
+        // Handle errors returned by Flask
+        if (!response.ok) {
+            throw new Error(
+                data.reply || `Server error: ${response.status}`
+            );
+        }
 
-    } catch (error) {
-
-        console.error(error);
-
+        // Display the chatbot's reply
         addMessage(
-            "Backend connection failed",
+            data.reply || "I couldn't generate a response.",
             "assistant"
         );
+
+    } catch (error) {
+        console.error("Chat error:", error);
+
+        addMessage(
+            "Sorry, I couldn't connect to CyberMentor AI. Please check that the Flask server is running.",
+            "assistant"
+        );
+
+    } finally {
+        // Re-enable the send button
+        if (sendButton) {
+            sendButton.disabled = false;
+        }
+
+        input.focus();
     }
 }
 
-// Form submit
+// Handle form submission
 form.addEventListener("submit", (event) => {
-
     event.preventDefault();
-
     sendMessage();
 });
 
-// Enter key
+// Send message when Enter is pressed
+// Shift + Enter creates a new line
 input.addEventListener("keydown", (event) => {
-
     if (event.key === "Enter" && !event.shiftKey) {
-
         event.preventDefault();
-
-        sendMessage();
+        form.requestSubmit();
     }
 });
 
-// Auto-growing textarea
+// Automatically grow the textarea
 input.addEventListener("input", () => {
-
     input.style.height = "auto";
 
     input.style.height =
@@ -97,23 +116,17 @@ input.addEventListener("input", () => {
 document
     .querySelector("#new-chat")
     .addEventListener("click", () => {
-
         messages.replaceChildren();
 
-        const welcome =
-            document.createElement("p");
+        const welcome = document.createElement("p");
 
-        welcome.className =
-            "welcome-message";
-
+        welcome.className = "welcome-message";
         welcome.textContent =
             "Hi! Type a message to get started.";
 
         messages.append(welcome);
 
         input.value = "";
-
         input.style.height = "auto";
-
         input.focus();
     });
